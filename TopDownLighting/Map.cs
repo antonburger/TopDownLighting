@@ -20,7 +20,7 @@ namespace TopDownLighting
         {
             graphicsDevice.Indices = IndexBuffer;
             graphicsDevice.SetVertexBuffer(VertexBuffer);
-            graphicsDevice.DrawPrimitives(PrimitiveType.TriangleList, 0, triangleCount);
+            graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, triangleCount);
         }
 
         public VertexBuffer VertexBuffer { get; }

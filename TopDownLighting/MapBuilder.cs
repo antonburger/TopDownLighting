@@ -64,11 +64,10 @@ namespace TopDownLighting
             return from vertex in vertices
                    select new MapGeometryVertex
                    {
-                        Position = new Vector4(
+                        Position = new Vector3(
                             x: vertex.X * dimensions.HorizontalSize,
                             y: vertex.Ceiling ? dimensions.CeilingHeight : 0f,
-                            z: vertex.Y * dimensions.HorizontalSize,
-                            w: 1f
+                            z: vertex.Y * dimensions.HorizontalSize
                         ),
                         Normal = GenerateNormalFromDirection(vertex.NormalDirection)
                    };
@@ -190,11 +189,11 @@ namespace TopDownLighting
         private struct MapGeometryVertex: IVertexType
         {
             private static readonly VertexDeclaration VertexDeclaration = new VertexDeclaration(
-                new VertexElement(0, VertexElementFormat.Vector4, VertexElementUsage.Position, 0),
-                new VertexElement(16, VertexElementFormat.Vector3, VertexElementUsage.Normal, 0)
+                new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
+                new VertexElement(12, VertexElementFormat.Vector3, VertexElementUsage.Normal, 0)
             );
 
-            public Vector4 Position;
+            public Vector3 Position;
             public Vector3 Normal;
 
             VertexDeclaration IVertexType.VertexDeclaration

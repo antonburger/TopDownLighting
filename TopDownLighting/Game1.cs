@@ -48,6 +48,8 @@ namespace TopDownLighting
             // TODO: use this.Content to load your game content here
             var md = new MapDescription(10, 10, new MapWorldSpaceDimensions(1f, 1f));
             md.SetFloor(4, 4);
+            md.SetFloor(4, 5);
+            md.SetFloor(5, 5);
             md.SetFloor(6, 5);
             //md.SetFloor(1, 0);
             //md.SetFloor(5, 5);
