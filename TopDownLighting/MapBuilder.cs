@@ -11,10 +11,11 @@ namespace TopDownLighting
 {
     public class MapBuilder
     {
-        public Map BuildMap(MapDescription description, GraphicsDevice graphicsDevice)
+        public Map BuildMap(MapDescription description, GraphicsDevice graphicsDevice, Texture2D floor, Texture2D wall)
         {
             var vertices = new List<MapVertex>();
             var faces = new List<MapFace>();
+            var cellBoundaries = new List<CellBoundary>();
 
             for (int y = 0; y < description.Height; y++)
             {
@@ -23,28 +24,38 @@ namespace TopDownLighting
                     // Don't need to generate faces for solid cells.
                     if (description.IsSolid(x, y)) continue;
 
+                    var boundingBox = new BoundingBox(new Vector3(x, 0, y), new Vector3(x + 1, description.MapWorldSpaceDimensions.CeilingHeight, y + 1));
+                    var boundary = new CellBoundary(boundingBox);
+                    cellBoundaries.Add(boundary);
+
+                    AddFloor(new Point(x, y), vertices, faces);
+
                     var solidSides = description.GetSolidSides(x, y);
                     if (solidSides.HasFlag(CellSides.Left))
                     {
                         AddWall(new Point(x, y + 1), new Point(x, y), NormalDirection.East, vertices, faces);
+                        boundary.AddSolidSide(CellSides.Left);
                     }
                     if (solidSides.HasFlag(CellSides.Top))
                     {
                         AddWall(new Point(x, y), new Point(x + 1, y), NormalDirection.South, vertices, faces);
+                        boundary.AddSolidSide(CellSides.Top);
                     }
                     if (solidSides.HasFlag(CellSides.Right))
                     {
                         AddWall(new Point(x + 1, y), new Point(x + 1, y + 1), NormalDirection.West, vertices, faces);
+                        boundary.AddSolidSide(CellSides.Right);
                     }
                     if (solidSides.HasFlag(CellSides.Bottom))
                     {
                         AddWall(new Point(x + 1, y + 1), new Point(x, y + 1), NormalDirection.North, vertices, faces);
+                        boundary.AddSolidSide(CellSides.Bottom);
                     }
                 }
             }
 
             var geometry = GenerateGeometry(vertices, faces, description.MapWorldSpaceDimensions, graphicsDevice);
-            return new Map(faces.Count, geometry.Item1, geometry.Item2);
+            return new Map(faces.Count, geometry.Item1, geometry.Item2, cellBoundaries, floor, wall);
         }
 
         private static Tuple<VertexBuffer, IndexBuffer> GenerateGeometry(List<MapVertex> vertices, List<MapFace> faces, MapWorldSpaceDimensions dimensions, GraphicsDevice graphicsDevice)
@@ -69,7 +80,8 @@ namespace TopDownLighting
                             y: vertex.Ceiling ? dimensions.CeilingHeight : 0f,
                             z: vertex.Y * dimensions.HorizontalSize
                         ),
-                        Normal = GenerateNormalFromDirection(vertex.NormalDirection)
+                        Normal = GenerateNormalFromDirection(vertex.NormalDirection),
+                        Tex = vertex.Tex,
                    };
         }
 
@@ -101,15 +113,30 @@ namespace TopDownLighting
         {
             var wallVertices = new[]
             {
-                new MapVertex(left.X, left.Y, true, normalDirection),
-                new MapVertex(left.X, left.Y, false, normalDirection),
-                new MapVertex(right.X, right.Y, false, normalDirection),
-                new MapVertex(right.X, right.Y, true, normalDirection),
+                new MapVertex(left.X, left.Y, true, normalDirection, new Vector2(left.X + left.Y, 0)),
+                new MapVertex(left.X, left.Y, false, normalDirection, new Vector2(left.X + left.Y, 1)),
+                new MapVertex(right.X, right.Y, false, normalDirection, new Vector2(right.X + right.Y, 1)),
+                new MapVertex(right.X, right.Y, true, normalDirection, new Vector2(right.X + right.Y, 0)),
             };
 
             var wallVertexIndices = wallVertices.Select(v => FindOrAddVertex(v, vertices)).ToList();
-            faces.Add(new MapFace(wallVertexIndices[0], wallVertexIndices[1], wallVertexIndices[2]));
-            faces.Add(new MapFace(wallVertexIndices[2], wallVertexIndices[3], wallVertexIndices[0]));
+            faces.Add(new MapFace(wallVertexIndices[0], wallVertexIndices[2], wallVertexIndices[1]));
+            faces.Add(new MapFace(wallVertexIndices[2], wallVertexIndices[0], wallVertexIndices[3]));
+        }
+
+        private static void AddFloor(Point pt, List<MapVertex> vertices, List<MapFace> faces)
+        {
+            var floorVertices = new[]
+            {
+                new MapVertex(pt.X, pt.Y, false, NormalDirection.Up, pt.ToVector2()),
+                new MapVertex(pt.X, pt.Y + 1, false, NormalDirection.Up, new Vector2(pt.X, pt.Y + 1)),
+                new MapVertex(pt.X + 1, pt.Y + 1, false, NormalDirection.Up, new Vector2(pt.X + 1, pt.Y + 1)),
+                new MapVertex(pt.X + 1, pt.Y, false, NormalDirection.Up, new Vector2(pt.X + 1, pt.Y)),
+            };
+
+            var floorVertexIndices = floorVertices.Select(v => FindOrAddVertex(v, vertices)).ToList();
+            faces.Add(new MapFace(floorVertexIndices[0], floorVertexIndices[2], floorVertexIndices[1]));
+            faces.Add(new MapFace(floorVertexIndices[2], floorVertexIndices[0], floorVertexIndices[3]));
         }
 
         private static uint FindOrAddVertex(MapVertex vertex, List<MapVertex> vertices)
@@ -142,12 +169,13 @@ namespace TopDownLighting
 
         private class MapVertex: IEquatable<MapVertex>
         {
-            public MapVertex(int x, int y, bool ceiling, NormalDirection normalDirection)
+            public MapVertex(int x, int y, bool ceiling, NormalDirection normalDirection, Vector2 tex)
             {
                 X = x;
                 Y = y;
                 Ceiling = ceiling;
                 NormalDirection = normalDirection;
+                Tex = tex;
             }
 
             public bool Equals(MapVertex other)
@@ -175,6 +203,7 @@ namespace TopDownLighting
             public int Y { get; }
             public bool Ceiling { get; }
             public NormalDirection NormalDirection { get; }
+            public Vector2 Tex { get; }
         }
 
         private enum NormalDirection
@@ -190,11 +219,13 @@ namespace TopDownLighting
         {
             private static readonly VertexDeclaration VertexDeclaration = new VertexDeclaration(
                 new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
-                new VertexElement(12, VertexElementFormat.Vector3, VertexElementUsage.Normal, 0)
+                new VertexElement(12, VertexElementFormat.Vector3, VertexElementUsage.Normal, 0),
+                new VertexElement(24, VertexElementFormat.Vector2, VertexElementUsage.TextureCoordinate, 0)
             );
 
             public Vector3 Position;
             public Vector3 Normal;
+            public Vector2 Tex;
 
             VertexDeclaration IVertexType.VertexDeclaration
             {
@@ -203,7 +234,7 @@ namespace TopDownLighting
 
             public override string ToString()
             {
-                return $"P: ({Position}), N: ({Normal})";
+                return $"P: ({Position}), N: ({Normal}), T: ({Tex})";
             }
         }
 

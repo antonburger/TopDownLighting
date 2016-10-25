@@ -13,7 +13,12 @@ namespace TopDownLighting
         GraphicsDeviceManager graphics;
         SpriteBatch spriteBatch;
         Map map;
-        BasicEffect effect;
+        Effect effect;
+        Texture2D floor;
+        Texture2D wall;
+        Matrix world;
+        Matrix view;
+        Matrix proj;
 
         public Game1()
         {
@@ -30,8 +35,10 @@ namespace TopDownLighting
         {
             GraphicsDevice.RasterizerState = new RasterizerState
             {
-                CullMode = CullMode.None
+                CullMode = CullMode.None,
             };
+
+            IsMouseVisible = true;
 
             base.Initialize();
         }
@@ -45,29 +52,33 @@ namespace TopDownLighting
             // Create a new SpriteBatch, which can be used to draw textures.
             spriteBatch = new SpriteBatch(GraphicsDevice);
 
+            floor = Content.Load<Texture2D>("tex/floor");
+            wall = Content.Load<Texture2D>("tex/wall");
+
+            effect = Content.Load<Effect>("Map");
+
             // TODO: use this.Content to load your game content here
-            var md = new MapDescription(10, 10, new MapWorldSpaceDimensions(1f, 1f));
+            var md = new MapDescription(10, 10, new MapWorldSpaceDimensions(1f, 2f));
             md.SetFloor(4, 4);
             md.SetFloor(4, 5);
+            md.SetFloor(4, 6);
             md.SetFloor(5, 5);
+            md.SetFloor(6, 4);
             md.SetFloor(6, 5);
+            md.SetFloor(6, 6);
             //md.SetFloor(1, 0);
             //md.SetFloor(5, 5);
             var builder = new MapBuilder();
-            map = builder.BuildMap(md, GraphicsDevice);
+            map = builder.BuildMap(md, GraphicsDevice, floor, wall);
 
-            effect = new BasicEffect(GraphicsDevice);
-            effect.AmbientLightColor = new Vector3(0.3f, 0.3f, 0.3f);
-            effect.DiffuseColor = new Vector3(1, 0, 0);
-            effect.LightingEnabled = true;
-            effect.DirectionalLight0.Enabled = true;
-            effect.DirectionalLight0.DiffuseColor = new Vector3(1);
-            effect.DirectionalLight0.Direction = new Vector3(1);
-            effect.VertexColorEnabled = false;
-
-            effect.World = Matrix.Identity;
-            effect.View = Matrix.CreateLookAt(new Vector3(0, 5, 10), new Vector3(5, 0, 5), Vector3.Up);
-            effect.Projection = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 3), GraphicsDevice.Viewport.AspectRatio, 0.1f, 50);
+            effect.Parameters["World"].SetValue(world = Matrix.Identity);
+            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(5.5f, 5, 6.5f), new Vector3(5.5f, 0, 4.5f), new Vector3(0.3f, 0, -0.8f)));
+            effect.Parameters["Projection"].SetValue(proj = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 3), GraphicsDevice.Viewport.AspectRatio, 0.1f, 50));
+            effect.Parameters["LightWorldPosition"].SetValue(new Vector3(4.5f, 1.5f, 5.5f));
+            effect.Parameters["LightWorldDirection"].SetValue(new Vector3(1, -0.5f, 1));
+            effect.Parameters["LightTightness"].SetValue(12.0f);
+            effect.Parameters["LightBrightness"].SetValue(5.0f);
+            effect.CurrentTechnique = effect.Techniques["PerPixelConeLight"];
         }
 
         /// <summary>
@@ -90,6 +101,19 @@ namespace TopDownLighting
                 Exit();
 
             // TODO: Add your update logic here
+            var mouseState = Mouse.GetState();
+            var translation = Matrix.CreateTranslation(0, 0, 0);
+            var nearPoint = GraphicsDevice.Viewport.Unproject(new Vector3(mouseState.X, mouseState.Y, 0), proj, view, translation);
+            var farPoint = GraphicsDevice.Viewport.Unproject(new Vector3(mouseState.X, mouseState.Y, 1), proj, view, translation);
+            var ray = new Ray(nearPoint, farPoint - nearPoint);
+            var intersection = map.Intersects(ray);
+            if (intersection != null)
+            {
+                var mapPoint = ray.Position + intersection.Value * ray.Direction;
+                var newLightDirection = mapPoint - effect.Parameters["LightWorldPosition"].GetValueVector3();
+                newLightDirection.Normalize();
+                effect.Parameters["LightWorldDirection"].SetValue(newLightDirection);
+            }
 
             base.Update(gameTime);
         }
@@ -100,7 +124,7 @@ namespace TopDownLighting
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(Color.CornflowerBlue);
+            GraphicsDevice.Clear(Color.Black);
 
             foreach (var pass in effect.CurrentTechnique.Passes)
             {
