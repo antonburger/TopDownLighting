@@ -7,8 +7,11 @@ matrix View;
 matrix Projection;
 float3 LightWorldPosition;
 float3 LightWorldDirection;
-float LightTightness;
-float LightBrightness;
+float LightSpotCutoffCos;
+float LightSpotExponent;
+float LightConstantAttenuation;
+float LightLinearAttenuation;
+float LightQuadraticAttenuation;
 
 texture floorDiffuse;
 texture wallDiffuse;
@@ -98,8 +101,9 @@ float4 PerPixelPSPointLight(PerPixelVSOutput input, in bool isFrontFacing : SV_I
 {
     float3 worldSpaceLightVector = LightWorldPosition - input.WorldPosition;
     float lightDot = clamp(dot(normalize(worldSpaceLightVector), normalize(input.WorldNormal)), 0, 1);
-    float distance = clamp(dot(worldSpaceLightVector, worldSpaceLightVector), 1, 1000);
-    float lightContribution = clamp(0.05 + LightBrightness * lightDot / distance, 0, 1);
+    float distance = sqrt(dot(worldSpaceLightVector, worldSpaceLightVector));
+    lightDot = lightDot / (LightConstantAttenuation + LightLinearAttenuation * distance + LightQuadraticAttenuation * distance * distance);
+    float lightContribution = clamp(0.05 + lightDot, 0, 1);
     float4 diffuse = tex2D(floorSampler, input.UV);
     return isFrontFacing ? lightContribution * diffuse : 0.1f;
 }
@@ -109,10 +113,12 @@ float4 PerPixelPSConeLight(PerPixelVSOutput input, in bool isFrontFacing : SV_Is
     float3 worldSpaceLightVector = LightWorldPosition - input.WorldPosition;
     float lightDot = clamp(dot(normalize(worldSpaceLightVector), normalize(input.WorldNormal)), 0, 1);
     float coneDot = clamp(dot(normalize(worldSpaceLightVector), normalize(-LightWorldDirection)), 0, 1);
-    coneDot = pow(coneDot, LightTightness);
+    coneDot = coneDot < LightSpotCutoffCos ? 0 : coneDot;
+    coneDot = pow(coneDot, LightSpotExponent);
     lightDot = lightDot * coneDot;
-    float distance = clamp(dot(worldSpaceLightVector, worldSpaceLightVector), 1, 1000);
-    float lightContribution = clamp(0.05 + LightBrightness * lightDot / distance, 0, 1);
+    float distance = sqrt(dot(worldSpaceLightVector, worldSpaceLightVector));
+    lightDot = lightDot / (LightConstantAttenuation + LightLinearAttenuation * distance + LightQuadraticAttenuation * distance * distance);
+    float lightContribution = clamp(0.05 + lightDot, 0, 1);
     float4 diffuse = tex2D(floorSampler, input.UV);
     return isFrontFacing ? lightContribution * diffuse : 0.1f;
 }
@@ -135,7 +141,7 @@ technique PerPixelPointLight
     }
 }
 
-technique PerPixelConeLight
+technique PerPixelSpotLight
 {
     pass P0
     {

@@ -19,6 +19,7 @@ namespace TopDownLighting
         Matrix world;
         Matrix view;
         Matrix proj;
+        Light light;
 
         public Game1()
         {
@@ -71,14 +72,26 @@ namespace TopDownLighting
             var builder = new MapBuilder();
             map = builder.BuildMap(md, GraphicsDevice, floor, wall);
 
+            light = new Light(GraphicsDevice, 512);
+            light.WorldPosition = new Vector3(4.5f, 1.5f, 5.5f);
+            light.WorldDirection = new Vector3(1, -0.5f, 1);
+            light.SpotAngleDegrees = 30f;
+            light.SpotExponent = 20f;
+            light.ConstantAttenuation = 1f;
+            light.LinearAttenuation = 0f;
+            light.QuadraticAttenuation = 0.005f;
+
             effect.Parameters["World"].SetValue(world = Matrix.Identity);
-            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(5.5f, 5, 6.5f), new Vector3(5.5f, 0, 4.5f), new Vector3(0.3f, 0, -0.8f)));
+            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(6f, 5, 6.5f), new Vector3(6f, 0, 5.5f), Vector3.Up));
             effect.Parameters["Projection"].SetValue(proj = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 3), GraphicsDevice.Viewport.AspectRatio, 0.1f, 50));
-            effect.Parameters["LightWorldPosition"].SetValue(new Vector3(4.5f, 1.5f, 5.5f));
-            effect.Parameters["LightWorldDirection"].SetValue(new Vector3(1, -0.5f, 1));
-            effect.Parameters["LightTightness"].SetValue(12.0f);
-            effect.Parameters["LightBrightness"].SetValue(5.0f);
-            effect.CurrentTechnique = effect.Techniques["PerPixelConeLight"];
+            effect.Parameters["LightWorldPosition"].SetValue(light.WorldPosition);
+            effect.Parameters["LightWorldDirection"].SetValue(light.WorldDirection);
+            effect.Parameters["LightSpotCutoffCos"].SetValue((float)Math.Cos(MathHelper.ToRadians(light.SpotAngleDegrees)));
+            effect.Parameters["LightSpotExponent"].SetValue(light.SpotExponent);
+            effect.Parameters["LightConstantAttenuation"].SetValue(light.ConstantAttenuation);
+            effect.Parameters["LightLinearAttenuation"].SetValue(light.LinearAttenuation);
+            effect.Parameters["LightQuadraticAttenuation"].SetValue(light.QuadraticAttenuation);
+            effect.CurrentTechnique = effect.Techniques["PerPixelSpotLight"];
         }
 
         /// <summary>
