@@ -33,17 +33,17 @@ namespace TopDownLighting
                 break;
             case CellSides.Top:
                 normal = Vector3.Backward;
-                pointOnPlane = boundingBox.Max;
+                pointOnPlane = boundingBox.Min;
                 break;
             case CellSides.Bottom:
                 normal = Vector3.Forward;
-                pointOnPlane = boundingBox.Min;
+                pointOnPlane = boundingBox.Max;
                 break;
             default:
                 throw new Exception("Not a valid side.");
             }
 
-            float d = Vector3.Dot(normal, pointOnPlane);
+            float d = -Vector3.Dot(normal, pointOnPlane);
 
             var plane = new Plane(normal, d);
 
@@ -57,7 +57,7 @@ namespace TopDownLighting
             var intersections = from plane in planes
                                 let intersection = ray.Intersects(plane)
                                 where intersection != null
-                                    //&& boundingBox.Contains(ray.Position + (float)intersection * ray.Direction) != ContainmentType.Disjoint
+                                && boundingBox.Contains(ray.Position + (float)intersection * ray.Direction) != ContainmentType.Disjoint
                                 orderby intersection ascending
                                 select intersection;
 
