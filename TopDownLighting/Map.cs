@@ -14,16 +14,14 @@ namespace TopDownLighting
         {
             this.triangleCount = triangleCount;
             this.cellBoundaries = cellBoundaries;
-            this.floor = floor;
-            this.wall = wall;
+            this.Floor = floor;
+            this.Wall = wall;
             VertexBuffer = vertexBuffer;
             IndexBuffer = indexBuffer;
         }
 
         public void Draw(GraphicsDevice graphicsDevice)
         {
-            graphicsDevice.Textures[1] = floor;
-            graphicsDevice.Textures[0] = wall;
             graphicsDevice.Indices = IndexBuffer;
             graphicsDevice.SetVertexBuffer(VertexBuffer);
             graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, triangleCount);
@@ -42,10 +40,10 @@ namespace TopDownLighting
 
         public VertexBuffer VertexBuffer { get; }
         public IndexBuffer IndexBuffer { get; }
+        public Texture2D Floor { get; }
+        public Texture2D Wall { get; }
 
         private readonly int triangleCount;
         private readonly List<CellBoundary> cellBoundaries;
-        private readonly Texture2D floor;
-        private readonly Texture2D wall;
     }
 }

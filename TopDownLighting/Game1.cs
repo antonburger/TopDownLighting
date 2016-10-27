@@ -34,11 +34,6 @@ namespace TopDownLighting
         /// </summary>
         protected override void Initialize()
         {
-            GraphicsDevice.RasterizerState = new RasterizerState
-            {
-                CullMode = CullMode.None,
-            };
-
             IsMouseVisible = true;
 
             base.Initialize();
@@ -63,35 +58,46 @@ namespace TopDownLighting
             md.SetFloor(4, 4);
             md.SetFloor(4, 5);
             md.SetFloor(4, 6);
+            md.SetFloor(4, 7);
+            md.SetFloor(5, 4);
             md.SetFloor(5, 5);
+            //md.SetFloor(5, 6);
+            md.SetFloor(5, 7);
             md.SetFloor(6, 4);
             md.SetFloor(6, 5);
             md.SetFloor(6, 6);
-            //md.SetFloor(1, 0);
-            //md.SetFloor(5, 5);
+            md.SetFloor(6, 7);
+            md.SetFloor(7, 5);
+            md.SetFloor(8, 4);
+            md.SetFloor(8, 5);
+            md.SetFloor(8, 6);
+            md.SetFloor(9, 4);
+            md.SetFloor(9, 5);
+            md.SetFloor(9, 6);
             var builder = new MapBuilder();
             map = builder.BuildMap(md, GraphicsDevice, floor, wall);
 
             light = new Light(GraphicsDevice, 512);
-            light.WorldPosition = new Vector3(4.5f, 1.5f, 5.5f);
+            light.WorldPosition = new Vector3(4.5f, 1.0f, 5.5f);
             light.WorldDirection = new Vector3(1, -0.5f, 1);
             light.SpotAngleDegrees = 30f;
-            light.SpotExponent = 20f;
+            light.SpotExponent = 1;
             light.ConstantAttenuation = 1f;
-            light.LinearAttenuation = 0f;
-            light.QuadraticAttenuation = 0.005f;
+            light.LinearAttenuation = 0.1f;
+            light.QuadraticAttenuation = 0.05f;
 
             effect.Parameters["World"].SetValue(world = Matrix.Identity);
-            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(6f, 5, 6.5f), new Vector3(6f, 0, 5.5f), Vector3.Up));
+            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(6f, 7, 6.5f), new Vector3(6f, 0, 5.5f), Vector3.Up));
             effect.Parameters["Projection"].SetValue(proj = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 3), GraphicsDevice.Viewport.AspectRatio, 0.1f, 50));
             effect.Parameters["LightWorldPosition"].SetValue(light.WorldPosition);
             effect.Parameters["LightWorldDirection"].SetValue(light.WorldDirection);
-            effect.Parameters["LightSpotCutoffCos"].SetValue((float)Math.Cos(MathHelper.ToRadians(light.SpotAngleDegrees)));
+            effect.Parameters["LightSpotCutoffCos"].SetValue((float)Math.Cos(MathHelper.ToRadians(light.SpotAngleDegrees / 2)));
             effect.Parameters["LightSpotExponent"].SetValue(light.SpotExponent);
             effect.Parameters["LightConstantAttenuation"].SetValue(light.ConstantAttenuation);
             effect.Parameters["LightLinearAttenuation"].SetValue(light.LinearAttenuation);
             effect.Parameters["LightQuadraticAttenuation"].SetValue(light.QuadraticAttenuation);
-            effect.CurrentTechnique = effect.Techniques["PerPixelSpotLight"];
+            effect.Parameters["wallDiffuse"].SetValue(map.Wall);
+            effect.Parameters["shadowMap"].SetValue(light.ShadowMap);
         }
 
         /// <summary>
@@ -123,9 +129,11 @@ namespace TopDownLighting
             if (intersection != null)
             {
                 var mapPoint = ray.Position + intersection.Value * ray.Direction;
-                var newLightDirection = mapPoint - effect.Parameters["LightWorldPosition"].GetValueVector3();
-                newLightDirection.Normalize();
-                effect.Parameters["LightWorldDirection"].SetValue(newLightDirection);
+                light.WorldDirection = mapPoint - effect.Parameters["LightWorldPosition"].GetValueVector3();
+                light.WorldDirection.Normalize();
+                effect.Parameters["LightWorldDirection"].SetValue(light.WorldDirection);
+                effect.Parameters["LightView"].SetValue(Matrix.CreateLookAt(light.WorldPosition, light.WorldPosition + light.WorldDirection, Vector3.Up));
+                effect.Parameters["LightProjection"].SetValue(Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(light.SpotAngleDegrees), 1f, 0.01f, 10f));
             }
 
             base.Update(gameTime);
@@ -137,13 +145,41 @@ namespace TopDownLighting
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Draw(GameTime gameTime)
         {
-            GraphicsDevice.Clear(Color.Black);
-
+            GraphicsDevice.SetRenderTarget(light.ShadowMap);
+            GraphicsDevice.BlendState = BlendState.Opaque;
+            GraphicsDevice.DepthStencilState = DepthStencilState.Default;
+            GraphicsDevice.RasterizerState = new RasterizerState
+            {
+                CullMode = CullMode.None,
+            };
+            GraphicsDevice.Clear(Color.White);
+            effect.CurrentTechnique = effect.Techniques["SpotShadow"];
             foreach (var pass in effect.CurrentTechnique.Passes)
             {
                 pass.Apply();
                 map.Draw(GraphicsDevice);
             }
+
+            GraphicsDevice.SetRenderTarget(null);
+            GraphicsDevice.Clear(Color.Black);
+            effect.CurrentTechnique = effect.Techniques["Ambient"];
+            foreach (var pass in effect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                map.Draw(GraphicsDevice);
+            }
+
+            GraphicsDevice.BlendState = BlendState.AlphaBlend;
+            effect.CurrentTechnique = effect.Techniques["Spot"];
+            foreach (var pass in effect.CurrentTechnique.Passes)
+            {
+                pass.Apply();
+                map.Draw(GraphicsDevice);
+            }
+
+            spriteBatch.Begin(blendState: BlendState.Opaque);
+            spriteBatch.Draw(light.ShadowMap, Vector2.Zero, Color.White);
+            spriteBatch.End();
 
             base.Draw(gameTime);
         }
