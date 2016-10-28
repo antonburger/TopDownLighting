@@ -15,10 +15,9 @@ float LightConstantAttenuation;
 float LightLinearAttenuation;
 float LightQuadraticAttenuation;
 
-texture2D wallDiffuse;
-sampler2D wallSampler = sampler_state
+sampler wall
 {
-    Texture = <wallDiffuse>;
+    Texture = (wall);
     MinFilter = Linear;
     MagFilter = Linear;
     MipFilter = Linear;
@@ -26,13 +25,12 @@ sampler2D wallSampler = sampler_state
     AddressV = Wrap;
 };
 
-texture2D shadowMap;
-sampler2D shadowMapSampler = sampler_state
+sampler shadowMap
 {
-    Texture = <shadowMap>;
-    MinFilter = Linear;
-    MagFilter = Linear;
-    MipFilter = Linear;
+    Texture = (shadowMap);
+    MinFilter = Point;
+    MagFilter = Point;
+    MipFilter = Point;
     AddressU = Clamp;
     AddressV = Clamp;
 };
@@ -67,39 +65,66 @@ PerPixelVSOutput PerPixelVS(in PerPixelVSInput input)
 	return output;
 }
 
-float4 PerPixelPSSpotLight(PerPixelVSOutput input, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
+float getDiffuseComponent(float3 worldLightVector, float3 worldVertexPosition, float3 worldNormal)
 {
-    if (!isFrontFacing)
+    worldLightVector = normalize(worldLightVector);
+    worldNormal = normalize(worldNormal);
+    float d = dot(worldLightVector, worldNormal);
+    return clamp(d, 0, 1);
+}
+
+float getSpotFactor(float3 worldLightVector, float3 worldLightDirection, float spotCutoffCos, float spotExponent)
+{
+    worldLightVector = normalize(worldLightVector);
+    worldLightDirection = normalize(-worldLightDirection);
+    float d = dot(worldLightVector, worldLightDirection);
+    if (d < spotCutoffCos)
     {
-        return 0;
+        d = 0;
     }
-    float4 lightRelativePosition = mul(float4(input.WorldPosition, 1), LightView);
-    lightRelativePosition = mul(lightRelativePosition, LightProjection);
-    lightRelativePosition.xyz /= lightRelativePosition.w;
-    lightRelativePosition.z = 1 - lightRelativePosition.z;
-    float2 shadowMapCoords = lightRelativePosition.xy * 0.5 + float2(0.5, 0.5);
-    shadowMapCoords.y = 1 - shadowMapCoords.y;
-    if (saturate(shadowMapCoords.x) != shadowMapCoords.x || saturate(shadowMapCoords.y) != shadowMapCoords.y)
+    return pow(d, spotExponent);
+}
+
+float4 getIsOutsideShadow(float3 worldVertexPosition)
+{
+    float isInsideTexture = 1;
+    float isCloserThanMap = 1;
+
+    float4 lightVertexPosition = mul(float4(worldVertexPosition, 1), mul(LightView, LightProjection));
+    lightVertexPosition.xyz /= lightVertexPosition.w;
+    lightVertexPosition.z = 1 - lightVertexPosition.z;
+
+    float2 shadowMapUV = lightVertexPosition.xy * 0.5 + 0.5;
+    shadowMapUV.y = 1 - shadowMapUV.y;
+    if (shadowMapUV.x < 0 || shadowMapUV.x > 1 || shadowMapUV.y < 0 || shadowMapUV.y > 1)
     {
-        return 0;
-    }
-    float shadowMapDepth = tex2D(shadowMapSampler, shadowMapCoords).r;
-    if (lightRelativePosition.z < shadowMapDepth - 0.0001)
-    {
-        return 0;
+        isInsideTexture = 0;
     }
 
-    float3 worldSpaceLightVector = LightWorldPosition - input.WorldPosition;
-    float lightDot = clamp(dot(normalize(worldSpaceLightVector), normalize(input.WorldNormal)), 0, 1);
-    float coneDot = clamp(dot(normalize(worldSpaceLightVector), normalize(-LightWorldDirection)), 0, 1);
-    coneDot = coneDot < LightSpotCutoffCos ? 0 : coneDot;
-    coneDot = pow(coneDot, LightSpotExponent);
-    lightDot = lightDot * coneDot;
-    float distance = sqrt(dot(worldSpaceLightVector, worldSpaceLightVector));
-    lightDot = lightDot / (LightConstantAttenuation + LightLinearAttenuation * distance + LightQuadraticAttenuation * distance * distance);
-    float lightContribution = lightDot;
-    float4 diffuse = tex2D(wallSampler, input.UV);
-    return lightContribution * diffuse;
+    float shadowMapDepth = tex2D(shadowMap, shadowMapUV).r;
+    if (lightVertexPosition.z + 0.1 < shadowMapDepth)
+    {
+        isCloserThanMap = 0;
+    }
+
+    return float4(isInsideTexture * isCloserThanMap, shadowMapDepth, shadowMapUV.x, shadowMapUV.y);
+}
+
+float attenuate(float contribution, float3 worldLightVector)
+{
+    float distance = sqrt(dot(worldLightVector, worldLightVector));
+    return contribution / (LightConstantAttenuation + LightLinearAttenuation * distance + LightQuadraticAttenuation * distance * distance);
+}
+
+float4 PerPixelPSSpotLight(PerPixelVSOutput input, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
+{
+    float3 worldLightVector = LightWorldPosition - input.WorldPosition;
+    float4 diffuseColour = tex2D(wall, input.UV);
+    float diffuseContribution = getDiffuseComponent(worldLightVector, input.WorldPosition, input.WorldNormal);
+    float spotFactor = getSpotFactor(worldLightVector, LightWorldDirection, LightSpotCutoffCos, LightSpotExponent);
+    float4 unshadowed = getIsOutsideShadow(input.WorldPosition);
+    return unshadowed.x * float(isFrontFacing) * attenuate(diffuseContribution * spotFactor, worldLightVector) * diffuseColour;
+    return isFrontFacing * (diffuseColour * unshadowed.x + unshadowed.x * float4(lerp(0, 1, unshadowed.z), lerp(0, 1, 1 - unshadowed.z), lerp(0, 1, unshadowed.w), 1));
 }
 
 void PassthroughVS(inout float4 position : SV_Position, inout float2 uv : TEXCOORD0)
@@ -110,7 +135,7 @@ void PassthroughVS(inout float4 position : SV_Position, inout float2 uv : TEXCOO
 
 float4 AmbientPS(in float4 position : SV_Position, in float2 uv : TEXCOORD0, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
 {
-    return isFrontFacing ? 0.1 * tex2D(wallSampler, uv) : 0.1;
+    return isFrontFacing ? 0.2 * tex2D(wall, uv) : 0.1;
 }
 
 struct VS_OUT_SHADOW

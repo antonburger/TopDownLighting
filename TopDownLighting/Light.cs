@@ -12,7 +12,7 @@ namespace TopDownLighting
     {
         public Light(GraphicsDevice graphicsDevice, int shadowMapSideLengthPixels)
         {
-            ShadowMap = new RenderTarget2D(graphicsDevice, shadowMapSideLengthPixels, shadowMapSideLengthPixels, true, SurfaceFormat.Single, DepthFormat.Depth24, 0, RenderTargetUsage.DiscardContents);
+            ShadowMap = new RenderTarget2D(graphicsDevice, shadowMapSideLengthPixels, shadowMapSideLengthPixels, false, SurfaceFormat.Single, DepthFormat.Depth24, 1, RenderTargetUsage.DiscardContents);
         }
 
         public Matrix GetViewMatrix(Vector3? up = null)

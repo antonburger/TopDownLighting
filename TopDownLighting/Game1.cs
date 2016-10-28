@@ -55,36 +55,50 @@ namespace TopDownLighting
 
             // TODO: use this.Content to load your game content here
             var md = new MapDescription(10, 10, new MapWorldSpaceDimensions(1f, 2f));
+            md.SetFloor(6, 2);
+            md.SetFloor(7, 2);
+            md.SetFloor(2, 3);
+            md.SetFloor(4, 3);
+            md.SetFloor(5, 3);
+            md.SetFloor(6, 3);
+            md.SetFloor(1, 4);
+            md.SetFloor(2, 4);
+            md.SetFloor(3, 4);
             md.SetFloor(4, 4);
-            md.SetFloor(4, 5);
-            md.SetFloor(4, 6);
-            md.SetFloor(4, 7);
             md.SetFloor(5, 4);
-            md.SetFloor(5, 5);
-            //md.SetFloor(5, 6);
-            md.SetFloor(5, 7);
             md.SetFloor(6, 4);
-            md.SetFloor(6, 5);
-            md.SetFloor(6, 6);
-            md.SetFloor(6, 7);
-            md.SetFloor(7, 5);
             md.SetFloor(8, 4);
-            md.SetFloor(8, 5);
-            md.SetFloor(8, 6);
             md.SetFloor(9, 4);
+            md.SetFloor(2, 5);
+            md.SetFloor(4, 5);
+            md.SetFloor(5, 5);
+            md.SetFloor(6, 5);
+            md.SetFloor(7, 3);
+            md.SetFloor(7, 5);
+            md.SetFloor(8, 5);
             md.SetFloor(9, 5);
+            md.SetFloor(3, 6);
+            md.SetFloor(4, 6);
+            md.SetFloor(6, 6);
+            md.SetFloor(8, 6);
             md.SetFloor(9, 6);
+            md.SetFloor(3, 7);
+            md.SetFloor(4, 7);
+            md.SetFloor(5, 7);
+            md.SetFloor(6, 7);
+            md.SetFloor(3, 8);
+            md.SetFloor(4, 8);
             var builder = new MapBuilder();
             map = builder.BuildMap(md, GraphicsDevice, floor, wall);
 
             light = new Light(GraphicsDevice, 512);
-            light.WorldPosition = new Vector3(4.5f, 1.0f, 5.5f);
+            light.WorldPosition = new Vector3(5f, 1f, 5f);
             light.WorldDirection = new Vector3(1, -0.5f, 1);
             light.SpotAngleDegrees = 30f;
             light.SpotExponent = 1;
             light.ConstantAttenuation = 1f;
-            light.LinearAttenuation = 0.1f;
-            light.QuadraticAttenuation = 0.05f;
+            light.LinearAttenuation = 0.0f;
+            light.QuadraticAttenuation = 0.1f;
 
             effect.Parameters["World"].SetValue(world = Matrix.Identity);
             effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(6f, 7, 6.5f), new Vector3(6f, 0, 5.5f), Vector3.Up));
@@ -96,8 +110,7 @@ namespace TopDownLighting
             effect.Parameters["LightConstantAttenuation"].SetValue(light.ConstantAttenuation);
             effect.Parameters["LightLinearAttenuation"].SetValue(light.LinearAttenuation);
             effect.Parameters["LightQuadraticAttenuation"].SetValue(light.QuadraticAttenuation);
-            effect.Parameters["wallDiffuse"].SetValue(map.Wall);
-            effect.Parameters["shadowMap"].SetValue(light.ShadowMap);
+            effect.Parameters["wall"].SetValue(map.Wall);
         }
 
         /// <summary>
@@ -133,7 +146,7 @@ namespace TopDownLighting
                 light.WorldDirection.Normalize();
                 effect.Parameters["LightWorldDirection"].SetValue(light.WorldDirection);
                 effect.Parameters["LightView"].SetValue(Matrix.CreateLookAt(light.WorldPosition, light.WorldPosition + light.WorldDirection, Vector3.Up));
-                effect.Parameters["LightProjection"].SetValue(Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(light.SpotAngleDegrees), 1f, 0.01f, 10f));
+                effect.Parameters["LightProjection"].SetValue(Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(light.SpotAngleDegrees), 1f, 1f, 100f));
             }
 
             base.Update(gameTime);
@@ -145,6 +158,7 @@ namespace TopDownLighting
         /// <param name="gameTime">Provides a snapshot of timing values.</param>
         protected override void Draw(GameTime gameTime)
         {
+            effect.Parameters["shadowMap"].SetValue((Texture2D)null);
             GraphicsDevice.SetRenderTarget(light.ShadowMap);
             GraphicsDevice.BlendState = BlendState.Opaque;
             GraphicsDevice.DepthStencilState = DepthStencilState.Default;
@@ -152,7 +166,7 @@ namespace TopDownLighting
             {
                 CullMode = CullMode.None,
             };
-            GraphicsDevice.Clear(Color.White);
+            GraphicsDevice.Clear(Color.Black);
             effect.CurrentTechnique = effect.Techniques["SpotShadow"];
             foreach (var pass in effect.CurrentTechnique.Passes)
             {
@@ -161,7 +175,12 @@ namespace TopDownLighting
             }
 
             GraphicsDevice.SetRenderTarget(null);
-            GraphicsDevice.Clear(Color.Black);
+            effect.Parameters["shadowMap"].SetValue(light.ShadowMap);
+            GraphicsDevice.RasterizerState = new RasterizerState
+            {
+                CullMode = CullMode.None,
+            };
+            GraphicsDevice.Clear(Color.FromNonPremultiplied(new Vector4(new Vector3(0.1f), 1)));
             effect.CurrentTechnique = effect.Techniques["Ambient"];
             foreach (var pass in effect.CurrentTechnique.Passes)
             {
@@ -177,9 +196,9 @@ namespace TopDownLighting
                 map.Draw(GraphicsDevice);
             }
 
-            spriteBatch.Begin(blendState: BlendState.Opaque);
-            spriteBatch.Draw(light.ShadowMap, Vector2.Zero, Color.White);
-            spriteBatch.End();
+            //spriteBatch.Begin(blendState: BlendState.Opaque);
+            //spriteBatch.Draw(light.ShadowMap, Vector2.Zero, scale: null, color: Color.White);
+            //spriteBatch.End();
 
             base.Draw(gameTime);
         }
