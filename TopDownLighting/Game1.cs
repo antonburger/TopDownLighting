@@ -16,10 +16,12 @@ namespace TopDownLighting
         Effect effect;
         Texture2D floor;
         Texture2D wall;
-        Matrix world;
         Matrix view;
         Matrix proj;
         Light light;
+        LittleBox[] boxes;
+        VertexBuffer boxVertices;
+        IndexBuffer boxIndices;
 
         public Game1()
         {
@@ -92,7 +94,7 @@ namespace TopDownLighting
             map = builder.BuildMap(md, GraphicsDevice, floor, wall);
 
             light = new Light(GraphicsDevice, 512);
-            light.WorldPosition = new Vector3(5f, 1f, 5f);
+            light.WorldPosition = new Vector3(5f, 2f, 5f);
             light.WorldDirection = new Vector3(1, -0.5f, 1);
             light.SpotAngleDegrees = 45f;
             light.SpotExponent = 10;
@@ -100,7 +102,7 @@ namespace TopDownLighting
             light.LinearAttenuation = 0.0f;
             light.QuadraticAttenuation = 0.1f;
 
-            effect.Parameters["World"].SetValue(world = Matrix.Identity);
+            effect.Parameters["World"].SetValue(Matrix.Identity);
             effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(6f, 7, 6.5f), new Vector3(6f, 0, 5.5f), Vector3.Up));
             effect.Parameters["Projection"].SetValue(proj = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 3), GraphicsDevice.Viewport.AspectRatio, 0.1f, 50));
             effect.Parameters["LightWorldPosition"].SetValue(light.WorldPosition);
@@ -110,6 +112,14 @@ namespace TopDownLighting
             effect.Parameters["LightConstantAttenuation"].SetValue(light.ConstantAttenuation);
             effect.Parameters["LightLinearAttenuation"].SetValue(light.LinearAttenuation);
             effect.Parameters["LightQuadraticAttenuation"].SetValue(light.QuadraticAttenuation);
+
+            LittleBox.SetBuffers(boxVertices = new VertexBuffer(GraphicsDevice, typeof(VertexPositionNormalTexture), 24, BufferUsage.WriteOnly), boxIndices = new IndexBuffer(GraphicsDevice, IndexElementSize.SixteenBits, 6 * 2 * 3, BufferUsage.WriteOnly));
+            boxes = new[]
+            {
+                new LittleBox(new Vector3(9, 0.8f, 5.5f), 0.5f),
+                new LittleBox(new Vector3(9.1f, 1.5f, 5.2f), 0.3f),
+                new LittleBox(new Vector3(6.5f, 0.25f, 3.5f), 0.5f),
+            };
         }
 
         /// <summary>
@@ -164,13 +174,26 @@ namespace TopDownLighting
             GraphicsDevice.RasterizerState = new RasterizerState
             {
                 CullMode = CullMode.None,
+                DepthClipEnable = false,
             };
             GraphicsDevice.Clear(Color.Black);
             effect.CurrentTechnique = effect.Techniques["SpotShadow"];
+
+            effect.Parameters["World"].SetValue(Matrix.Identity);
             foreach (var pass in effect.CurrentTechnique.Passes)
             {
                 pass.Apply();
                 map.Draw(GraphicsDevice);
+            }
+
+            foreach (var box in boxes)
+            {
+                effect.Parameters["World"].SetValue(box.CreateWorldMatrix());
+                foreach (var pass in effect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    box.Draw(GraphicsDevice);
+                }
             }
 
             GraphicsDevice.SetRenderTarget(null);
@@ -178,21 +201,48 @@ namespace TopDownLighting
             GraphicsDevice.RasterizerState = new RasterizerState
             {
                 CullMode = CullMode.None,
+                DepthClipEnable = true,
             };
             GraphicsDevice.Clear(Color.FromNonPremultiplied(new Vector4(new Vector3(0.1f), 1)));
             effect.CurrentTechnique = effect.Techniques["Ambient"];
+
+            effect.Parameters["World"].SetValue(Matrix.Identity);
             foreach (var pass in effect.CurrentTechnique.Passes)
             {
                 pass.Apply();
                 map.Draw(GraphicsDevice);
             }
 
+            effect.Parameters["diffuse"].SetValue(wall);
+            foreach (var box in boxes)
+            {
+                effect.Parameters["World"].SetValue(box.CreateWorldMatrix());
+                foreach (var pass in effect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    box.Draw(GraphicsDevice);
+                }
+            }
+
             GraphicsDevice.BlendState = BlendState.AlphaBlend;
             effect.CurrentTechnique = effect.Techniques["Spot"];
+
+            effect.Parameters["World"].SetValue(Matrix.Identity);
             foreach (var pass in effect.CurrentTechnique.Passes)
             {
                 pass.Apply();
                 map.Draw(GraphicsDevice);
+            }
+
+            effect.Parameters["diffuse"].SetValue(wall);
+            foreach (var box in boxes)
+            {
+                effect.Parameters["World"].SetValue(box.CreateWorldMatrix());
+                foreach (var pass in effect.CurrentTechnique.Passes)
+                {
+                    pass.Apply();
+                    box.Draw(GraphicsDevice);
+                }
             }
 
             //spriteBatch.Begin(blendState: BlendState.Opaque);

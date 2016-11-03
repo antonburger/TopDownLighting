@@ -41,6 +41,7 @@
     <Compile Include="CellBoundary.cs" />
     <Compile Include="Game1.cs" />
     <Compile Include="Light.cs" />
+    <Compile Include="LittleBox.cs" />
     <Compile Include="Map.cs" />
     <Compile Include="MapBuilder.cs" />
     <Compile Include="MapDescription.cs" />

@@ -148,8 +148,8 @@ struct VS_OUT_SHADOW
 VS_OUT_SHADOW SpotShadowVS(float4 position : SV_Position)
 {
     VS_OUT_SHADOW output = (VS_OUT_SHADOW)0;
-    matrix vp = mul(LightView, LightProjection);
-    output.Position = mul(position, vp);
+    matrix wvp = mul(mul(World, LightView), LightProjection);
+    output.Position = mul(position, wvp);
     output.Depth = output.Position.z / output.Position.w;
     return output;
 }
