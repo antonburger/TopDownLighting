@@ -16,9 +16,10 @@ namespace TopDownLighting
         Effect effect;
         Texture2D floor;
         Texture2D wall;
+        Texture2D box;
         Matrix view;
         Matrix proj;
-        Light light;
+        Light[] lights;
         LittleBox[] boxes;
         VertexBuffer boxVertices;
         IndexBuffer boxIndices;
@@ -52,6 +53,7 @@ namespace TopDownLighting
 
             floor = Content.Load<Texture2D>("tex/floor");
             wall = Content.Load<Texture2D>("tex/wall");
+            box = Content.Load<Texture2D>("tex/box");
 
             effect = Content.Load<Effect>("Map");
 
@@ -93,25 +95,43 @@ namespace TopDownLighting
             var builder = new MapBuilder();
             map = builder.BuildMap(md, GraphicsDevice, floor, wall);
 
-            light = new Light(GraphicsDevice, 512);
-            light.WorldPosition = new Vector3(5f, 2f, 5f);
-            light.WorldDirection = new Vector3(1, -0.5f, 1);
-            light.SpotAngleDegrees = 45f;
-            light.SpotExponent = 10;
-            light.ConstantAttenuation = 1f;
-            light.LinearAttenuation = 0.0f;
-            light.QuadraticAttenuation = 0.1f;
+            lights = new[]
+            {
+                new Light(GraphicsDevice, 512)
+                {
+                    WorldPosition = new Vector3(5f, 2f, 5f),
+                    WorldDirection = new Vector3(1, -0.5f, 1),
+                    SpotAngleDegrees = 45f,
+                    SpotExponent = 10,
+                    ConstantAttenuation = 1f,
+                    LinearAttenuation = 0.0f,
+                    QuadraticAttenuation = 0.1f,
+                },
+                new Light(GraphicsDevice, 512)
+                {
+                    WorldPosition = new Vector3(7.5f, 2f, 2f),
+                    WorldDirection = new Vector3(-1, -2f, 1),
+                    SpotAngleDegrees = 45f,
+                    SpotExponent = 10,
+                    ConstantAttenuation = 1f,
+                    LinearAttenuation = 0.0f,
+                    QuadraticAttenuation = 0.1f,
+                },
+                new Light(GraphicsDevice, 512)
+                {
+                    WorldPosition = new Vector3(3f, 2f, 8f),
+                    WorldDirection = new Vector3(2, -1, -1),
+                    SpotAngleDegrees = 90f,
+                    SpotExponent = 1,
+                    ConstantAttenuation = 1f,
+                    LinearAttenuation = 0.0f,
+                    QuadraticAttenuation = 0.1f,
+                },
+            };
 
             effect.Parameters["World"].SetValue(Matrix.Identity);
-            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(6f, 7, 6.5f), new Vector3(6f, 0, 5.5f), Vector3.Up));
+            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(6f, 6, 7.5f), new Vector3(6f, 0, 5.5f), Vector3.Up));
             effect.Parameters["Projection"].SetValue(proj = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 3), GraphicsDevice.Viewport.AspectRatio, 0.1f, 50));
-            effect.Parameters["LightWorldPosition"].SetValue(light.WorldPosition);
-            effect.Parameters["LightWorldDirection"].SetValue(light.WorldDirection);
-            effect.Parameters["LightSpotCutoffCos"].SetValue((float)Math.Cos(MathHelper.ToRadians(light.SpotAngleDegrees / 2)));
-            effect.Parameters["LightSpotExponent"].SetValue(light.SpotExponent);
-            effect.Parameters["LightConstantAttenuation"].SetValue(light.ConstantAttenuation);
-            effect.Parameters["LightLinearAttenuation"].SetValue(light.LinearAttenuation);
-            effect.Parameters["LightQuadraticAttenuation"].SetValue(light.QuadraticAttenuation);
 
             LittleBox.SetBuffers(boxVertices = new VertexBuffer(GraphicsDevice, typeof(VertexPositionNormalTexture), 24, BufferUsage.WriteOnly), boxIndices = new IndexBuffer(GraphicsDevice, IndexElementSize.SixteenBits, 6 * 2 * 3, BufferUsage.WriteOnly));
             boxes = new[]
@@ -151,11 +171,8 @@ namespace TopDownLighting
             if (intersection != null)
             {
                 var mapPoint = ray.Position + intersection.Value * ray.Direction;
-                light.WorldDirection = mapPoint - effect.Parameters["LightWorldPosition"].GetValueVector3();
-                light.WorldDirection.Normalize();
-                effect.Parameters["LightWorldDirection"].SetValue(light.WorldDirection);
-                effect.Parameters["LightView"].SetValue(Matrix.CreateLookAt(light.WorldPosition, light.WorldPosition + light.WorldDirection, Vector3.Up));
-                effect.Parameters["LightProjection"].SetValue(Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(light.SpotAngleDegrees), 1f, 1f, 100f));
+                lights[0].WorldDirection = mapPoint - lights[0].WorldPosition;
+                lights[0].WorldDirection.Normalize();
             }
 
             base.Update(gameTime);
@@ -168,7 +185,6 @@ namespace TopDownLighting
         protected override void Draw(GameTime gameTime)
         {
             effect.Parameters["shadowMap"].SetValue((Texture2D)null);
-            GraphicsDevice.SetRenderTarget(light.ShadowMap);
             GraphicsDevice.BlendState = BlendState.Opaque;
             GraphicsDevice.DepthStencilState = DepthStencilState.Default;
             GraphicsDevice.RasterizerState = new RasterizerState
@@ -176,28 +192,34 @@ namespace TopDownLighting
                 CullMode = CullMode.None,
                 DepthClipEnable = false,
             };
-            GraphicsDevice.Clear(Color.Black);
             effect.CurrentTechnique = effect.Techniques["SpotShadow"];
-
-            effect.Parameters["World"].SetValue(Matrix.Identity);
-            foreach (var pass in effect.CurrentTechnique.Passes)
+            foreach (var light in lights)
             {
-                pass.Apply();
-                map.Draw(GraphicsDevice);
-            }
+                GraphicsDevice.SetRenderTarget(light.ShadowMap);
+                GraphicsDevice.Clear(Color.Black);
 
-            foreach (var box in boxes)
-            {
-                effect.Parameters["World"].SetValue(box.CreateWorldMatrix());
+                effect.Parameters["LightView"].SetValue(Matrix.CreateLookAt(light.WorldPosition, light.WorldPosition + light.WorldDirection, Vector3.Up));
+                effect.Parameters["LightProjection"].SetValue(Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(light.SpotAngleDegrees), 1f, 1f, 100f));
+
+                effect.Parameters["World"].SetValue(Matrix.Identity);
                 foreach (var pass in effect.CurrentTechnique.Passes)
                 {
                     pass.Apply();
-                    box.Draw(GraphicsDevice);
+                    map.Draw(GraphicsDevice);
+                }
+
+                foreach (var box in boxes)
+                {
+                    effect.Parameters["World"].SetValue(box.CreateWorldMatrix());
+                    foreach (var pass in effect.CurrentTechnique.Passes)
+                    {
+                        pass.Apply();
+                        box.Draw(GraphicsDevice);
+                    }
                 }
             }
 
             GraphicsDevice.SetRenderTarget(null);
-            effect.Parameters["shadowMap"].SetValue(light.ShadowMap);
             GraphicsDevice.RasterizerState = new RasterizerState
             {
                 CullMode = CullMode.None,
@@ -213,7 +235,7 @@ namespace TopDownLighting
                 map.Draw(GraphicsDevice);
             }
 
-            effect.Parameters["diffuse"].SetValue(wall);
+            effect.Parameters["diffuse"].SetValue(box);
             foreach (var box in boxes)
             {
                 effect.Parameters["World"].SetValue(box.CreateWorldMatrix());
@@ -226,22 +248,35 @@ namespace TopDownLighting
 
             GraphicsDevice.BlendState = BlendState.AlphaBlend;
             effect.CurrentTechnique = effect.Techniques["Spot"];
-
-            effect.Parameters["World"].SetValue(Matrix.Identity);
-            foreach (var pass in effect.CurrentTechnique.Passes)
+            foreach (var light in lights)
             {
-                pass.Apply();
-                map.Draw(GraphicsDevice);
-            }
+                effect.Parameters["shadowMap"].SetValue(light.ShadowMap);
+                effect.Parameters["LightView"].SetValue(Matrix.CreateLookAt(light.WorldPosition, light.WorldPosition + light.WorldDirection, Vector3.Up));
+                effect.Parameters["LightProjection"].SetValue(Matrix.CreatePerspectiveFieldOfView(MathHelper.ToRadians(light.SpotAngleDegrees), 1f, 1f, 100f));
+                effect.Parameters["LightWorldPosition"].SetValue(light.WorldPosition);
+                effect.Parameters["LightWorldDirection"].SetValue(light.WorldDirection);
+                effect.Parameters["LightSpotCutoffCos"].SetValue((float)Math.Cos(MathHelper.ToRadians(light.SpotAngleDegrees / 2)));
+                effect.Parameters["LightSpotExponent"].SetValue(light.SpotExponent);
+                effect.Parameters["LightConstantAttenuation"].SetValue(light.ConstantAttenuation);
+                effect.Parameters["LightLinearAttenuation"].SetValue(light.LinearAttenuation);
+                effect.Parameters["LightQuadraticAttenuation"].SetValue(light.QuadraticAttenuation);
 
-            effect.Parameters["diffuse"].SetValue(wall);
-            foreach (var box in boxes)
-            {
-                effect.Parameters["World"].SetValue(box.CreateWorldMatrix());
+                effect.Parameters["World"].SetValue(Matrix.Identity);
                 foreach (var pass in effect.CurrentTechnique.Passes)
                 {
                     pass.Apply();
-                    box.Draw(GraphicsDevice);
+                    map.Draw(GraphicsDevice);
+                }
+
+                effect.Parameters["diffuse"].SetValue(box);
+                foreach (var box in boxes)
+                {
+                    effect.Parameters["World"].SetValue(box.CreateWorldMatrix());
+                    foreach (var pass in effect.CurrentTechnique.Passes)
+                    {
+                        pass.Apply();
+                        box.Draw(GraphicsDevice);
+                    }
                 }
             }
 
