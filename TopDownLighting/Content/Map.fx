@@ -65,6 +65,11 @@ PerPixelVSOutput PerPixelVS(in PerPixelVSInput input)
 	return output;
 }
 
+float4 getDiffuseColour(sampler s, float2 uv)
+{
+    return tex2D(s, uv);
+}
+
 float getDiffuseComponent(float3 worldLightVector, float3 worldVertexPosition, float3 worldNormal)
 {
     worldLightVector = normalize(worldLightVector);
@@ -120,7 +125,7 @@ float attenuate(float contribution, float3 worldLightVector)
 float4 PerPixelPSSpotLight(PerPixelVSOutput input, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
 {
     float3 worldLightVector = LightWorldPosition - input.WorldPosition;
-    float4 diffuseColour = tex2D(diffuse, input.UV);
+    float4 diffuseColour = getDiffuseColour(diffuse, input.UV);
     float diffuseContribution = getDiffuseComponent(worldLightVector, input.WorldPosition, input.WorldNormal);
     float spotFactor = getSpotFactor(worldLightVector, LightWorldDirection, LightSpotCutoffCos, LightSpotExponent);
     float4 unshadowed = getIsOutsideShadow(input.WorldPosition, input.WorldNormal);
@@ -136,7 +141,7 @@ void PassthroughVS(inout float4 position : SV_Position, inout float2 uv : TEXCOO
 
 float4 AmbientPS(in float4 position : SV_Position, in float2 uv : TEXCOORD0, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
 {
-    return isFrontFacing ? 0.3 * tex2D(diffuse, uv) : 0.1;
+    return isFrontFacing ? 0.3 * getDiffuseColour(diffuse, uv) : 0.1;
 }
 
 struct VS_OUT_SHADOW

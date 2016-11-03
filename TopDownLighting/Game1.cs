@@ -2,6 +2,7 @@
 using Microsoft.Xna.Framework.Graphics;
 using Microsoft.Xna.Framework.Input;
 using System;
+using System.Linq;
 
 namespace TopDownLighting
 {
@@ -23,6 +24,10 @@ namespace TopDownLighting
         LittleBox[] boxes;
         VertexBuffer boxVertices;
         IndexBuffer boxIndices;
+        LittleBox draggedBox;
+        Vector3 draggedBoxModelDragPosition;
+        Plane draggedBoxHitPlane;
+        bool leftButtonWasUp = true;
 
         public Game1()
         {
@@ -109,8 +114,8 @@ namespace TopDownLighting
                 },
                 new Light(GraphicsDevice, 512)
                 {
-                    WorldPosition = new Vector3(7.5f, 2f, 2f),
-                    WorldDirection = new Vector3(-1, -2f, 1),
+                    WorldPosition = new Vector3(4.5f, 2f, 5f),
+                    WorldDirection = new Vector3(1, -1f, -1),
                     SpotAngleDegrees = 45f,
                     SpotExponent = 10,
                     ConstantAttenuation = 1f,
@@ -173,6 +178,41 @@ namespace TopDownLighting
                 var mapPoint = ray.Position + intersection.Value * ray.Direction;
                 lights[0].WorldDirection = mapPoint - lights[0].WorldPosition;
                 lights[0].WorldDirection.Normalize();
+            }
+
+            switch (mouseState.LeftButton)
+            {
+            case ButtonState.Released:
+                draggedBox = null;
+                leftButtonWasUp = true;
+                break;
+            case ButtonState.Pressed:
+                if (!leftButtonWasUp || draggedBox != null) break;
+                leftButtonWasUp = false;
+                    var closestBoxIntersection =
+                        (from box in boxes
+                         let boxIntersection = ray.Intersects(box.BoundingBox)
+                         where boxIntersection != null
+                         orderby boxIntersection ascending
+                         select new { Box = box, HitPoint = ray.Position + ray.Direction * boxIntersection.Value })
+                        .FirstOrDefault();
+
+                if (closestBoxIntersection == null) break;
+                draggedBox = closestBoxIntersection.Box;
+                draggedBoxModelDragPosition = closestBoxIntersection.HitPoint - draggedBox.Centre;
+                draggedBoxHitPlane = new Plane(Vector3.Up, -Vector3.Dot(Vector3.Up, closestBoxIntersection.HitPoint));
+                break;
+            }
+
+            if (draggedBox != null)
+            {
+                var planeHit = ray.Intersects(draggedBoxHitPlane);
+                if (planeHit != null)
+                {
+                    var planeHitPoint = ray.Position + ray.Direction * planeHit.Value;
+                    var newBoxCentre = planeHitPoint - draggedBoxModelDragPosition;
+                    draggedBox.Centre = newBoxCentre;
+                }
             }
 
             base.Update(gameTime);
