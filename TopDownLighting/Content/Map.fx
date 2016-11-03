@@ -85,11 +85,12 @@ float getSpotFactor(float3 worldLightVector, float3 worldLightDirection, float s
     return pow(d, spotExponent);
 }
 
-float4 getIsOutsideShadow(float3 worldVertexPosition)
+float4 getIsOutsideShadow(float3 worldVertexPosition, float3 worldNormal)
 {
     float isInsideTexture = 1;
     float isCloserThanMap = 1;
 
+    worldVertexPosition += worldNormal * 0.1;
     float4 lightVertexPosition = mul(float4(worldVertexPosition, 1), mul(LightView, LightProjection));
     lightVertexPosition.xyz /= lightVertexPosition.w;
     lightVertexPosition.z = 1 - lightVertexPosition.z;
@@ -102,7 +103,7 @@ float4 getIsOutsideShadow(float3 worldVertexPosition)
     }
 
     float shadowMapDepth = tex2D(shadowMap, shadowMapUV).r;
-    if (lightVertexPosition.z + 0.1 < shadowMapDepth)
+    if (lightVertexPosition.z + 0.05 < shadowMapDepth)
     {
         isCloserThanMap = 0;
     }
@@ -122,7 +123,7 @@ float4 PerPixelPSSpotLight(PerPixelVSOutput input, in bool isFrontFacing : SV_Is
     float4 diffuseColour = tex2D(diffuse, input.UV);
     float diffuseContribution = getDiffuseComponent(worldLightVector, input.WorldPosition, input.WorldNormal);
     float spotFactor = getSpotFactor(worldLightVector, LightWorldDirection, LightSpotCutoffCos, LightSpotExponent);
-    float4 unshadowed = getIsOutsideShadow(input.WorldPosition);
+    float4 unshadowed = getIsOutsideShadow(input.WorldPosition, input.WorldNormal);
     return unshadowed.x * float(isFrontFacing) * attenuate(diffuseContribution * spotFactor, worldLightVector) * diffuseColour;
     return isFrontFacing * (diffuseColour * unshadowed.x + unshadowed.x * float4(lerp(0, 1, unshadowed.z), lerp(0, 1, 1 - unshadowed.z), lerp(0, 1, unshadowed.w), 1));
 }

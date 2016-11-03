@@ -94,8 +94,8 @@ namespace TopDownLighting
             light = new Light(GraphicsDevice, 512);
             light.WorldPosition = new Vector3(5f, 1f, 5f);
             light.WorldDirection = new Vector3(1, -0.5f, 1);
-            light.SpotAngleDegrees = 30f;
-            light.SpotExponent = 1;
+            light.SpotAngleDegrees = 45f;
+            light.SpotExponent = 10;
             light.ConstantAttenuation = 1f;
             light.LinearAttenuation = 0.0f;
             light.QuadraticAttenuation = 0.1f;
