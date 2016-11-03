@@ -110,7 +110,6 @@ namespace TopDownLighting
             effect.Parameters["LightConstantAttenuation"].SetValue(light.ConstantAttenuation);
             effect.Parameters["LightLinearAttenuation"].SetValue(light.LinearAttenuation);
             effect.Parameters["LightQuadraticAttenuation"].SetValue(light.QuadraticAttenuation);
-            effect.Parameters["wall"].SetValue(map.Wall);
         }
 
         /// <summary>

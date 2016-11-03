@@ -10,21 +10,25 @@ namespace TopDownLighting
 {
     public class Map
     {
-        public Map(int triangleCount, VertexBuffer vertexBuffer, IndexBuffer indexBuffer, List<CellBoundary> cellBoundaries, Texture2D floor, Texture2D wall)
+        public Map(VertexBuffer vertexBuffer, IndexBuffer wallIndexBuffer, IndexBuffer floorIndexBuffer, List<CellBoundary> cellBoundaries, Texture2D floor, Texture2D wall)
         {
-            this.triangleCount = triangleCount;
             this.cellBoundaries = cellBoundaries;
             this.Floor = floor;
             this.Wall = wall;
             VertexBuffer = vertexBuffer;
-            IndexBuffer = indexBuffer;
+            WallIndexBuffer = wallIndexBuffer;
+            FloorIndexBuffer = floorIndexBuffer;
         }
 
         public void Draw(GraphicsDevice graphicsDevice)
         {
-            graphicsDevice.Indices = IndexBuffer;
             graphicsDevice.SetVertexBuffer(VertexBuffer);
-            graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, triangleCount);
+            graphicsDevice.Indices = WallIndexBuffer;
+            graphicsDevice.Textures[0] = Wall;
+            graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, WallIndexBuffer.IndexCount / 3);
+            graphicsDevice.Indices = FloorIndexBuffer;
+            graphicsDevice.Textures[0] = Floor;
+            graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, FloorIndexBuffer.IndexCount / 3);
         }
 
         public float? Intersects(Ray ray)
@@ -39,11 +43,11 @@ namespace TopDownLighting
         }
 
         public VertexBuffer VertexBuffer { get; }
-        public IndexBuffer IndexBuffer { get; }
+        public IndexBuffer WallIndexBuffer { get; }
+        public IndexBuffer FloorIndexBuffer { get; }
         public Texture2D Floor { get; }
         public Texture2D Wall { get; }
 
-        private readonly int triangleCount;
         private readonly List<CellBoundary> cellBoundaries;
     }
 }

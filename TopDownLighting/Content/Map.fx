@@ -15,9 +15,9 @@ float LightConstantAttenuation;
 float LightLinearAttenuation;
 float LightQuadraticAttenuation;
 
-sampler wall
+sampler diffuse
 {
-    Texture = (wall);
+    Texture = (diffuse);
     MinFilter = Linear;
     MagFilter = Linear;
     MipFilter = Linear;
@@ -119,7 +119,7 @@ float attenuate(float contribution, float3 worldLightVector)
 float4 PerPixelPSSpotLight(PerPixelVSOutput input, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
 {
     float3 worldLightVector = LightWorldPosition - input.WorldPosition;
-    float4 diffuseColour = tex2D(wall, input.UV);
+    float4 diffuseColour = tex2D(diffuse, input.UV);
     float diffuseContribution = getDiffuseComponent(worldLightVector, input.WorldPosition, input.WorldNormal);
     float spotFactor = getSpotFactor(worldLightVector, LightWorldDirection, LightSpotCutoffCos, LightSpotExponent);
     float4 unshadowed = getIsOutsideShadow(input.WorldPosition);
@@ -135,7 +135,7 @@ void PassthroughVS(inout float4 position : SV_Position, inout float2 uv : TEXCOO
 
 float4 AmbientPS(in float4 position : SV_Position, in float2 uv : TEXCOORD0, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
 {
-    return isFrontFacing ? 0.2 * tex2D(wall, uv) : 0.1;
+    return isFrontFacing ? 0.3 * tex2D(diffuse, uv) : 0.1;
 }
 
 struct VS_OUT_SHADOW

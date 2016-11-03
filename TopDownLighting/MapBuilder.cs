@@ -55,19 +55,22 @@ namespace TopDownLighting
             }
 
             var geometry = GenerateGeometry(vertices, faces, description.MapWorldSpaceDimensions, graphicsDevice);
-            return new Map(faces.Count, geometry.Item1, geometry.Item2, cellBoundaries, floor, wall);
+            return new Map(geometry.Item1, geometry.Item2, geometry.Item3, cellBoundaries, floor, wall);
         }
 
-        private static Tuple<VertexBuffer, IndexBuffer> GenerateGeometry(List<MapVertex> vertices, List<MapFace> faces, MapWorldSpaceDimensions dimensions, GraphicsDevice graphicsDevice)
+        private static Tuple<VertexBuffer, IndexBuffer, IndexBuffer> GenerateGeometry(List<MapVertex> vertices, List<MapFace> faces, MapWorldSpaceDimensions dimensions, GraphicsDevice graphicsDevice)
         {
             var vertexGeometry = GenerateVertices(vertices, dimensions);
-            var indexGeometry = GenerateIndices(faces);
+            var wallIndices = GenerateIndices(FaceType.Wall, faces);
+            var floorIndices = GenerateIndices(FaceType.Floor, faces);
             var vertexBuffer = new VertexBuffer(graphicsDevice, typeof(MapGeometryVertex), vertices.Count, BufferUsage.WriteOnly);
-            var indexBuffer = new IndexBuffer(graphicsDevice, IndexElementSize.ThirtyTwoBits, faces.Count * 3, BufferUsage.WriteOnly);
+            var wallIndexBuffer = new IndexBuffer(graphicsDevice, IndexElementSize.ThirtyTwoBits, wallIndices.Count(), BufferUsage.WriteOnly);
+            var floorIndexBuffer = new IndexBuffer(graphicsDevice, IndexElementSize.ThirtyTwoBits, floorIndices.Count(), BufferUsage.WriteOnly);
 
             vertexBuffer.SetData(vertexGeometry.ToArray());
-            indexBuffer.SetData(indexGeometry.ToArray());
-            return Tuple.Create(vertexBuffer, indexBuffer);
+            wallIndexBuffer.SetData(wallIndices.ToArray());
+            floorIndexBuffer.SetData(floorIndices.ToArray());
+            return Tuple.Create(vertexBuffer, wallIndexBuffer, floorIndexBuffer);
         }
 
         private static IEnumerable<MapGeometryVertex> GenerateVertices(IEnumerable<MapVertex> vertices, MapWorldSpaceDimensions dimensions)
@@ -99,9 +102,9 @@ namespace TopDownLighting
             throw new ArgumentException();
         }
 
-        private static IEnumerable<MapGeometryIndex> GenerateIndices(IEnumerable<MapFace> faces)
+        private static IEnumerable<MapGeometryIndex> GenerateIndices(FaceType faceType, IEnumerable<MapFace> faces)
         {
-            foreach (var face in faces)
+            foreach (var face in faces.Where(f => f.FaceType == faceType))
             {
                 yield return new MapGeometryIndex { Index = face.V1Index };
                 yield return new MapGeometryIndex { Index = face.V2Index };
@@ -120,8 +123,8 @@ namespace TopDownLighting
             };
 
             var wallVertexIndices = wallVertices.Select(v => FindOrAddVertex(v, vertices)).ToList();
-            faces.Add(new MapFace(wallVertexIndices[0], wallVertexIndices[2], wallVertexIndices[1]));
-            faces.Add(new MapFace(wallVertexIndices[2], wallVertexIndices[0], wallVertexIndices[3]));
+            faces.Add(new MapFace(FaceType.Wall, wallVertexIndices[0], wallVertexIndices[2], wallVertexIndices[1]));
+            faces.Add(new MapFace(FaceType.Wall, wallVertexIndices[2], wallVertexIndices[0], wallVertexIndices[3]));
         }
 
         private static void AddFloor(Point pt, List<MapVertex> vertices, List<MapFace> faces)
@@ -135,8 +138,8 @@ namespace TopDownLighting
             };
 
             var floorVertexIndices = floorVertices.Select(v => FindOrAddVertex(v, vertices)).ToList();
-            faces.Add(new MapFace(floorVertexIndices[0], floorVertexIndices[2], floorVertexIndices[1]));
-            faces.Add(new MapFace(floorVertexIndices[2], floorVertexIndices[0], floorVertexIndices[3]));
+            faces.Add(new MapFace(FaceType.Floor, floorVertexIndices[0], floorVertexIndices[2], floorVertexIndices[1]));
+            faces.Add(new MapFace(FaceType.Floor, floorVertexIndices[2], floorVertexIndices[0], floorVertexIndices[3]));
         }
 
         private static uint FindOrAddVertex(MapVertex vertex, List<MapVertex> vertices)
@@ -150,8 +153,9 @@ namespace TopDownLighting
 
         private class MapFace
         {
-            public MapFace(uint v1Index, uint v2Index, uint v3Index)
+            public MapFace(FaceType faceType, uint v1Index, uint v2Index, uint v3Index)
             {
+                FaceType = faceType;
                 V1Index = v1Index;
                 V2Index = v2Index;
                 V3Index = v3Index;
@@ -162,9 +166,16 @@ namespace TopDownLighting
                 return $"{V1Index}, {V2Index}, {V3Index}";
             }
 
+            public FaceType FaceType { get; }
             public uint V1Index { get; }
             public uint V2Index { get; }
             public uint V3Index { get; }
+        }
+
+        private enum FaceType
+        {
+            Wall,
+            Floor
         }
 
         private class MapVertex: IEquatable<MapVertex>
