@@ -11,7 +11,7 @@ namespace TopDownLighting
 {
     public class MapBuilder
     {
-        public Map BuildMap(MapDescription description, GraphicsDevice graphicsDevice, Texture2D floor, Texture2D wall)
+        public Map BuildMap(MapDescription description, GraphicsDevice graphicsDevice, Texture2D floor, Texture2D wall, Texture2D floorNormal, Texture2D wallNormal)
         {
             var vertices = new List<MapVertex>();
             var faces = new List<MapFace>();
@@ -55,7 +55,7 @@ namespace TopDownLighting
             }
 
             var geometry = GenerateGeometry(vertices, faces, description.MapWorldSpaceDimensions, graphicsDevice);
-            return new Map(geometry.Item1, geometry.Item2, geometry.Item3, cellBoundaries, floor, wall);
+            return new Map(geometry.Item1, geometry.Item2, geometry.Item3, cellBoundaries, floor, wall, floorNormal, wallNormal);
         }
 
         private static Tuple<VertexBuffer, IndexBuffer, IndexBuffer> GenerateGeometry(List<MapVertex> vertices, List<MapFace> faces, MapWorldSpaceDimensions dimensions, GraphicsDevice graphicsDevice)
@@ -85,6 +85,7 @@ namespace TopDownLighting
                         ),
                         Normal = GenerateNormalFromDirection(vertex.NormalDirection),
                         Tex = vertex.Tex,
+                        Tangent = GenerateNormalFromDirection(vertex.TangentDirection),
                    };
         }
 
@@ -114,12 +115,13 @@ namespace TopDownLighting
 
         private static void AddWall(Point left, Point right, NormalDirection normalDirection, List<MapVertex> vertices, List<MapFace> faces)
         {
+            var tangentDirection = GetTangentDirection(normalDirection);
             var wallVertices = new[]
             {
-                new MapVertex(left.X, left.Y, true, normalDirection, new Vector2(left.X + left.Y, 0)),
-                new MapVertex(left.X, left.Y, false, normalDirection, new Vector2(left.X + left.Y, 1)),
-                new MapVertex(right.X, right.Y, false, normalDirection, new Vector2(right.X + right.Y, 1)),
-                new MapVertex(right.X, right.Y, true, normalDirection, new Vector2(right.X + right.Y, 0)),
+                new MapVertex(left.X, left.Y, true, normalDirection, new Vector2(left.X + left.Y, 0), tangentDirection),
+                new MapVertex(left.X, left.Y, false, normalDirection, new Vector2(left.X + left.Y, 1), tangentDirection),
+                new MapVertex(right.X, right.Y, false, normalDirection, new Vector2(right.X + right.Y, 1), tangentDirection),
+                new MapVertex(right.X, right.Y, true, normalDirection, new Vector2(right.X + right.Y, 0), tangentDirection),
             };
 
             var wallVertexIndices = wallVertices.Select(v => FindOrAddVertex(v, vertices)).ToList();
@@ -127,14 +129,29 @@ namespace TopDownLighting
             faces.Add(new MapFace(FaceType.Wall, wallVertexIndices[2], wallVertexIndices[0], wallVertexIndices[3]));
         }
 
+        private static NormalDirection GetTangentDirection(NormalDirection normalDirection)
+        {
+            switch (normalDirection)
+            {
+            case NormalDirection.South: return NormalDirection.East;
+            case NormalDirection.East: return NormalDirection.North;
+            case NormalDirection.North: return NormalDirection.West;
+            case NormalDirection.West: return NormalDirection.South;
+            case NormalDirection.Up: return NormalDirection.East;
+            }
+
+            throw new Exception($"Unexpected normalDirection: {normalDirection}");
+        }
+
         private static void AddFloor(Point pt, List<MapVertex> vertices, List<MapFace> faces)
         {
+            var tangentDirection = GetTangentDirection(NormalDirection.Up);
             var floorVertices = new[]
             {
-                new MapVertex(pt.X, pt.Y, false, NormalDirection.Up, pt.ToVector2()),
-                new MapVertex(pt.X, pt.Y + 1, false, NormalDirection.Up, new Vector2(pt.X, pt.Y + 1)),
-                new MapVertex(pt.X + 1, pt.Y + 1, false, NormalDirection.Up, new Vector2(pt.X + 1, pt.Y + 1)),
-                new MapVertex(pt.X + 1, pt.Y, false, NormalDirection.Up, new Vector2(pt.X + 1, pt.Y)),
+                new MapVertex(pt.X, pt.Y, false, NormalDirection.Up, pt.ToVector2(), tangentDirection),
+                new MapVertex(pt.X, pt.Y + 1, false, NormalDirection.Up, new Vector2(pt.X, pt.Y + 1), tangentDirection),
+                new MapVertex(pt.X + 1, pt.Y + 1, false, NormalDirection.Up, new Vector2(pt.X + 1, pt.Y + 1), tangentDirection),
+                new MapVertex(pt.X + 1, pt.Y, false, NormalDirection.Up, new Vector2(pt.X + 1, pt.Y), tangentDirection),
             };
 
             var floorVertexIndices = floorVertices.Select(v => FindOrAddVertex(v, vertices)).ToList();
@@ -180,13 +197,14 @@ namespace TopDownLighting
 
         private class MapVertex: IEquatable<MapVertex>
         {
-            public MapVertex(int x, int y, bool ceiling, NormalDirection normalDirection, Vector2 tex)
+            public MapVertex(int x, int y, bool ceiling, NormalDirection normalDirection, Vector2 tex, NormalDirection tangentDirection)
             {
                 X = x;
                 Y = y;
                 Ceiling = ceiling;
                 NormalDirection = normalDirection;
                 Tex = tex;
+                TangentDirection = tangentDirection;
             }
 
             public bool Equals(MapVertex other)
@@ -215,6 +233,7 @@ namespace TopDownLighting
             public bool Ceiling { get; }
             public NormalDirection NormalDirection { get; }
             public Vector2 Tex { get; }
+            public NormalDirection TangentDirection { get; }
         }
 
         private enum NormalDirection
@@ -231,12 +250,14 @@ namespace TopDownLighting
             private static readonly VertexDeclaration VertexDeclaration = new VertexDeclaration(
                 new VertexElement(0, VertexElementFormat.Vector3, VertexElementUsage.Position, 0),
                 new VertexElement(12, VertexElementFormat.Vector3, VertexElementUsage.Normal, 0),
-                new VertexElement(24, VertexElementFormat.Vector2, VertexElementUsage.TextureCoordinate, 0)
+                new VertexElement(24, VertexElementFormat.Vector2, VertexElementUsage.TextureCoordinate, 0),
+                new VertexElement(32, VertexElementFormat.Vector3, VertexElementUsage.Tangent, 0)
             );
 
             public Vector3 Position;
             public Vector3 Normal;
             public Vector2 Tex;
+            public Vector3 Tangent;
 
             VertexDeclaration IVertexType.VertexDeclaration
             {
@@ -245,7 +266,7 @@ namespace TopDownLighting
 
             public override string ToString()
             {
-                return $"P: ({Position}), N: ({Normal}), T: ({Tex})";
+                return $"P: ({Position}), N: ({Normal}), UV: ({Tex}), T: ({Tangent})";
             }
         }
 

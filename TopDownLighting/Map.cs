@@ -10,11 +10,13 @@ namespace TopDownLighting
 {
     public class Map
     {
-        public Map(VertexBuffer vertexBuffer, IndexBuffer wallIndexBuffer, IndexBuffer floorIndexBuffer, List<CellBoundary> cellBoundaries, Texture2D floor, Texture2D wall)
+        public Map(VertexBuffer vertexBuffer, IndexBuffer wallIndexBuffer, IndexBuffer floorIndexBuffer, List<CellBoundary> cellBoundaries, Texture2D floor, Texture2D wall, Texture2D floorNormal, Texture2D wallNormal)
         {
             this.cellBoundaries = cellBoundaries;
-            this.Floor = floor;
-            this.Wall = wall;
+            Floor = floor;
+            Wall = wall;
+            FloorNormal = floorNormal;
+            WallNormal = wallNormal;
             VertexBuffer = vertexBuffer;
             WallIndexBuffer = wallIndexBuffer;
             FloorIndexBuffer = floorIndexBuffer;
@@ -24,10 +26,12 @@ namespace TopDownLighting
         {
             graphicsDevice.SetVertexBuffer(VertexBuffer);
             graphicsDevice.Indices = WallIndexBuffer;
-            graphicsDevice.Textures[0] = Wall;
+            graphicsDevice.Textures[1] = Wall;
+            graphicsDevice.Textures[0] = WallNormal;
             graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, WallIndexBuffer.IndexCount / 3);
             graphicsDevice.Indices = FloorIndexBuffer;
-            graphicsDevice.Textures[0] = Floor;
+            graphicsDevice.Textures[1] = Floor;
+            graphicsDevice.Textures[0] = FloorNormal;
             graphicsDevice.DrawIndexedPrimitives(PrimitiveType.TriangleList, 0, 0, FloorIndexBuffer.IndexCount / 3);
         }
 
@@ -47,6 +51,8 @@ namespace TopDownLighting
         public IndexBuffer FloorIndexBuffer { get; }
         public Texture2D Floor { get; }
         public Texture2D Wall { get; }
+        public Texture2D FloorNormal { get; }
+        public Texture2D WallNormal { get; }
 
         private readonly List<CellBoundary> cellBoundaries;
     }

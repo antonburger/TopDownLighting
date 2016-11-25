@@ -16,7 +16,9 @@ namespace TopDownLighting
         Map map;
         Effect effect;
         Texture2D floor;
+        Texture2D floorNormal;
         Texture2D wall;
+        Texture2D wallNormal;
         Texture2D box;
         Matrix view;
         Matrix proj;
@@ -57,13 +59,15 @@ namespace TopDownLighting
             spriteBatch = new SpriteBatch(GraphicsDevice);
 
             floor = Content.Load<Texture2D>("tex/floor");
+            floorNormal = Content.Load<Texture2D>("tex/floor_normal");
             wall = Content.Load<Texture2D>("tex/wall");
+            wallNormal = Content.Load<Texture2D>("tex/wall_normal");
             box = Content.Load<Texture2D>("tex/box");
 
             effect = Content.Load<Effect>("Map");
 
             // TODO: use this.Content to load your game content here
-            var md = new MapDescription(10, 10, new MapWorldSpaceDimensions(1f, 2f));
+            var md = new MapDescription(10, 10, new MapWorldSpaceDimensions(1f, 1f));
             md.SetFloor(6, 2);
             md.SetFloor(7, 2);
             md.SetFloor(2, 3);
@@ -98,23 +102,23 @@ namespace TopDownLighting
             md.SetFloor(3, 8);
             md.SetFloor(4, 8);
             var builder = new MapBuilder();
-            map = builder.BuildMap(md, GraphicsDevice, floor, wall);
+            map = builder.BuildMap(md, GraphicsDevice, floor, wall, floorNormal, wallNormal);
 
             lights = new[]
             {
                 new Light(GraphicsDevice, 512)
                 {
-                    WorldPosition = new Vector3(5f, 2f, 5f),
+                    WorldPosition = new Vector3(5f, 1f, 5f),
                     WorldDirection = new Vector3(1, -0.5f, 1),
-                    SpotAngleDegrees = 45f,
-                    SpotExponent = 10,
+                    SpotAngleDegrees = 60f,
+                    SpotExponent = 20,
                     ConstantAttenuation = 1f,
                     LinearAttenuation = 0.0f,
                     QuadraticAttenuation = 0.1f,
                 },
                 new Light(GraphicsDevice, 512)
                 {
-                    WorldPosition = new Vector3(4.5f, 2f, 5f),
+                    WorldPosition = new Vector3(4.5f, 1f, 5f),
                     WorldDirection = new Vector3(1, -1f, -1),
                     SpotAngleDegrees = 45f,
                     SpotExponent = 10,
@@ -124,7 +128,7 @@ namespace TopDownLighting
                 },
                 new Light(GraphicsDevice, 512)
                 {
-                    WorldPosition = new Vector3(3f, 2f, 8f),
+                    WorldPosition = new Vector3(3f, 1f, 8f),
                     WorldDirection = new Vector3(2, -1, -1),
                     SpotAngleDegrees = 90f,
                     SpotExponent = 1,
@@ -135,15 +139,16 @@ namespace TopDownLighting
             };
 
             effect.Parameters["World"].SetValue(Matrix.Identity);
-            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(6f, 6, 7.5f), new Vector3(6f, 0, 5.5f), Vector3.Up));
+            effect.Parameters["View"].SetValue(view = Matrix.CreateLookAt(new Vector3(5f, 4, 6.5f), new Vector3(5f, 0, 4.5f), Vector3.Up));
             effect.Parameters["Projection"].SetValue(proj = Matrix.CreatePerspectiveFieldOfView((float)(Math.PI / 3), GraphicsDevice.Viewport.AspectRatio, 0.1f, 50));
 
             LittleBox.SetBuffers(boxVertices = new VertexBuffer(GraphicsDevice, typeof(VertexPositionNormalTexture), 24, BufferUsage.WriteOnly), boxIndices = new IndexBuffer(GraphicsDevice, IndexElementSize.SixteenBits, 6 * 2 * 3, BufferUsage.WriteOnly));
-            boxes = new[]
+            boxes = new LittleBox[]
             {
-                new LittleBox(new Vector3(9, 0.8f, 5.5f), 0.5f),
-                new LittleBox(new Vector3(9.1f, 1.5f, 5.2f), 0.3f),
-                new LittleBox(new Vector3(6.5f, 0.25f, 3.5f), 0.5f),
+                // TODO: Disabled temporarily while getting normal mapping working for the background.
+                //new LittleBox(new Vector3(9, 0.8f, 5.5f), 0.5f),
+                //new LittleBox(new Vector3(9.1f, 1.5f, 5.2f), 0.3f),
+                //new LittleBox(new Vector3(6.5f, 0.25f, 3.5f), 0.5f),
             };
         }
 

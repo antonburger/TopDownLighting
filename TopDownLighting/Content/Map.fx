@@ -15,7 +15,17 @@ float LightConstantAttenuation;
 float LightLinearAttenuation;
 float LightQuadraticAttenuation;
 
-sampler diffuse
+sampler normalMap: register(s0)
+{
+    Texture = (normalMap);
+    MinFilter = Linear;
+    MagFilter = Linear;
+    MipFilter = Linear;
+    AddressU = Wrap;
+    AddressV = Wrap;
+};
+
+sampler diffuse: register(s1)
 {
     Texture = (diffuse);
     MinFilter = Linear;
@@ -25,7 +35,7 @@ sampler diffuse
     AddressV = Wrap;
 };
 
-sampler shadowMap
+sampler shadowMap: register(s2)
 {
     Texture = (shadowMap);
     MinFilter = Point;
@@ -40,6 +50,7 @@ struct PerPixelVSInput
     float4 Position : SV_Position;
     float3 Normal : NORMAL;
     float2 UV : TEXCOORD0;
+    float3 Tangent : TANGENT;
 };
 
 struct PerPixelVSOutput
@@ -48,6 +59,7 @@ struct PerPixelVSOutput
     float2 UV : TEXCOORD0;
     float3 WorldPosition : TEXCOORD1;
     float3 WorldNormal : TEXCOORD2;
+    float3 WorldTangent : TEXCOORD3;
 };
 
 PerPixelVSOutput PerPixelVS(in PerPixelVSInput input)
@@ -56,11 +68,12 @@ PerPixelVSOutput PerPixelVS(in PerPixelVSInput input)
 
     matrix wvp = mul(mul(World, View), Projection);
 
-    output.Position = mul(input.Position, wvp);
+    output.Position = mul(input.Position, wvp).xyzw;
     output.UV = input.UV;
-    float4 worldPosition = mul(input.Position, World);
+    float4 worldPosition = mul(input.Position, World).xyzw;
     output.WorldPosition = worldPosition / worldPosition.w;
-    output.WorldNormal = mul(float4(input.Normal, 0), World);
+    output.WorldNormal = mul(float4(input.Normal, 0), World).xyz;
+    output.WorldTangent = mul(float4(input.Tangent, 0), World).xyz;
 
 	return output;
 }
@@ -116,6 +129,18 @@ float4 getIsOutsideShadow(float3 worldVertexPosition, float3 worldNormal)
     return float4(isInsideTexture * isCloserThanMap, shadowMapDepth, shadowMapUV.x, shadowMapUV.y);
 }
 
+float3 calculateBumpedNormal(float3 normal, float3 tangent, float2 uv)
+{
+    normal = normalize(normal);
+    tangent = normalize(tangent - dot(tangent, normal) * normal);
+    float3 bitangent = cross(tangent, normal);
+    float3x3 tbn = float3x3(tangent, bitangent, normal);
+    float3 tangentSpaceNormal = tex2D(normalMap, uv).xyz;
+    tangentSpaceNormal = tangentSpaceNormal * 2 - 1;
+    float3 newNormal = normalize(mul(tangentSpaceNormal, tbn));
+    return newNormal;
+}
+
 float attenuate(float contribution, float3 worldLightVector)
 {
     float distance = sqrt(dot(worldLightVector, worldLightVector));
@@ -124,10 +149,14 @@ float attenuate(float contribution, float3 worldLightVector)
 
 float4 PerPixelPSSpotLight(PerPixelVSOutput input, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
 {
+    float3 normal = input.WorldNormal;
+    normal = calculateBumpedNormal(input.WorldNormal, input.WorldTangent, input.UV);
+    normal = normalize(0.00001 * normal + input.WorldNormal);
     float3 worldLightVector = LightWorldPosition - input.WorldPosition;
     float4 diffuseColour = getDiffuseColour(diffuse, input.UV);
-    float diffuseContribution = getDiffuseComponent(worldLightVector, input.WorldPosition, input.WorldNormal);
+    float diffuseContribution = getDiffuseComponent(worldLightVector, input.WorldPosition, normal);
     float spotFactor = getSpotFactor(worldLightVector, LightWorldDirection, LightSpotCutoffCos, LightSpotExponent);
+    // This still uses surface normal for shadowing determination - helps to reduce moving shadows.
     float4 unshadowed = getIsOutsideShadow(input.WorldPosition, input.WorldNormal);
     return unshadowed.x * float(isFrontFacing) * attenuate(diffuseContribution * spotFactor, worldLightVector) * diffuseColour;
     return isFrontFacing * (diffuseColour * unshadowed.x + unshadowed.x * float4(lerp(0, 1, unshadowed.z), lerp(0, 1, 1 - unshadowed.z), lerp(0, 1, unshadowed.w), 1));
@@ -141,7 +170,7 @@ void PassthroughVS(inout float4 position : SV_Position, inout float2 uv : TEXCOO
 
 float4 AmbientPS(in float4 position : SV_Position, in float2 uv : TEXCOORD0, in bool isFrontFacing : SV_IsFrontFace) : SV_Target
 {
-    return isFrontFacing ? 0.3 * getDiffuseColour(diffuse, uv) : 0.1;
+    return isFrontFacing ? 0.000001 * tex2D(normalMap, uv) + 0.2 * getDiffuseColour(diffuse, uv) : 0.1;
 }
 
 struct VS_OUT_SHADOW
